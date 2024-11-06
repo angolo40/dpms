@@ -198,17 +198,6 @@ services:
       - PUID=${PUID}
       - TZ=${TZ}
       - UMASK_SET=022
-#      - enableAutoConfig=true
-#      - enableRecyclarr=true
-#      - enableQueueCleaner=true
-#      - enableExtras=true
-#      - extrasType=trailers
-#      - extrasLanguages=it-IT
-#      - extrasOfficialOnly=false
-#      - extrasSingle=false
-#      - extrasKodiCompatibility=false
-#      - plexUrl=http://x.x.x.x:32400
-#      - plexToken=Token_Goes_Here1~
     volumes:
       - ${DOCKERCONFDIR}/radarr:/config
       - ${TORRENT_SHAREDDIR}:/downloads
