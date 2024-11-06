@@ -74,8 +74,8 @@ services:
       - ${DOCKERCONFDIR}/plex/transcode:/transcode
       - ${PLEX_SERIETV_DIR}:/tv
       - ${PLEX_MOVIE_DIR}:/movies
-    devices:
-      - /dev/dri:/dev/dri
+#    devices:     # Enable for trasconding HW (only for plex pass)
+#      - /dev/dri:/dev/dri
 #    deploy:
 #      resources:
 #        limits:
