@@ -1,0 +1,251 @@
+networks:
+  compose_default:
+    name: br-lan
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-lan
+    ipam:
+      driver: default
+      config:
+        - subnet: ${IPV4_NETWORK:-172.18.0}.0/24
+services:
+#-----------------------------------------------------------------------------------------------------
+  swag:
+    image: lscr.io/linuxserver/swag:latest
+    container_name: swag
+    cap_add:
+      - NET_ADMIN
+    networks:
+      compose_default:
+        ipv4_address: ${IPV4_NETWORK:-172.18.0}.10
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+      - URL=${DOCKERHOSTNAME}.${DOCKERDOMAIN}
+      - SUBDOMAINS=wildcard
+      - VALIDATION=dns
+      - DNSPLUGIN=cloudflare
+      - DOCKER_MODS=linuxserver/mods:swag-auto-proxy|linuxserver/mods:universal-docker|linuxserver/mods:universal-cloudflared|linuxserver/mods:swag-cloudflare-real-ip|linuxserver/mods:swag-auto-reload
+      - EMAIL=${EMAIL}
+      - CF_ZONE_ID=${CF_ZONE_ID}
+      - CF_ACCOUNT_ID=${CF_ZONE_ID}
+      - CF_API_TOKEN=${CF_API_TOKEN}
+      - CF_TUNNEL_NAME=${DOCKERHOSTNAME}.${DOCKERDOMAIN}
+      - CF_TUNNEL_PASSWORD=${CF_TUNNEL_PASSWORD}
+      - FILE__CF_TUNNEL_CONFIG=/config/tunnelconfig.yml
+      - STAGING=FALSE
+      - ONLY_SUBDOMAINS=true
+    extra_hosts:
+      - ${DOCKERDOMAIN}:127.0.0.1
+    volumes:
+      - ${DOCKERCONFDIR}/swag/config:/config
+#    ports:
+#      - 443:443
+#      - 80:80
+#      - 81:81
+    restart: always
+#-----------------------------------------------------------------------------------------------------
+  plex:
+    image: plexinc/pms-docker
+    container_name: plex
+    hostname: plex
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+      - HOSTNAME=${PLEX_HOSTNAME}.${DOCKERDOMAIN}
+      - PLEX_ADVERTISE_IP=${PLEX_ADVERTISE_IP}
+      - PLEX_ALLOWED_NETWORKS=${PLEX_ALLOWED_NETWORKS}
+      - PLEX_CLAIM=${PLEX_CLAIM}
+    networks:
+    - compose_default
+    ports:
+      - 32400:32400/tcp
+      - 3005:3005/tcp
+      - 8324:8324/tcp
+      - 32469:32469/tcp
+      - 32410:32410/udp
+      - 32412:32412/udp
+      - 32413:32413/udp
+      - 32414:32414/udp
+    volumes:
+      - ${DOCKERCONFDIR}/plex:/config
+      - ${DOCKERCONFDIR}/plex/transcode:/transcode
+      - ${PLEX_SERIETV_DIR}:/tv
+      - ${PLEX_MOVIE_DIR}:/movies
+    devices:
+      - /dev/dri:/dev/dri
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.5'
+#          memory: '512M'
+    restart: unless-stopped
+#-----------------------------------------------------------------------------------------------------
+  vpn:
+    image: ghcr.io/bubuntux/nordlynx
+    container_name: vpn
+    networks:
+      - compose_default
+    cap_add:
+      - NET_ADMIN               # Required
+    environment:                # Review https://github.com/bubuntux/nordvpn#environment-variables
+      - USER=${NORDVPN_EMAIL}
+      - PRIVATE_KEY=${NORDVPN_PRIVATE_KEY}
+      - QUERY=filters\[country_id\]=209&\[servers_groups\]\[identifier\]=legacy_p2p
+      - NET_LOCAL=10.0.0.0/16
+      - ALLOWED_IPS=0.0.0.0/0
+      - TZ=${TZ}
+#      - KILLSWITCH=Enable
+    healthcheck:
+      test: ping -c 1 www.google.com || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ports:
+      - 7878:7878 # Radarr
+      - 8989:8989 # Sonarr
+      - 9117:9117 # Jackett
+      - 9091:9091 # Transmission
+      - 51413:51413/tcp # Transmission
+      - 51413:51413/udp # Transmission
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+#      - net.ipv4.conf.all.rp_filter=2
+#      - net.ipv4.conf.all.src_valid_mark=1
+    restart: always
+#-----------------------------------------------------------------------------------------------------
+  torrent:
+    image: ghcr.io/linuxserver/transmission
+    container_name: torrent
+    network_mode: service:vpn
+    depends_on:
+      - vpn
+    volumes:
+    - /etc/localtime:/etc/localtime:ro
+    - ${DOCKERCONFDIR}/transmission:/config
+    - ${TORRENT_SHAREDDIR}/watch:/watch
+    - ${TORRENT_SHAREDDIR}/downloads:/downloads
+    environment:
+    - PGID=${PGID}
+    - PUID=${PUID}
+    - TZ=${TZ}
+    - USER=${TORRENT_USER} #optional
+    - PASS=${TORRENT_PASSWORD} #optional
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.5'
+#          memory: 512M
+    restart: always
+#-----------------------------------------------------------------------------------------------------
+  jackett:
+    image: ghcr.io/linuxserver/jackett
+    container_name: jackett
+    environment:
+    - PGID=${PGID}
+    - PUID=${PUID}
+    - TZ=${TZ}
+    volumes:
+      - ${DOCKERCONFDIR}/jackett:/config
+      - ${JACKETT_SHAREDDIR}:/downloads
+    network_mode: 'service:vpn'
+    depends_on:
+      - vpn
+#    ports:
+#      - 9117:9117
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.2'
+#          memory: '256M'
+    restart: unless-stopped
+#-----------------------------------------------------------------------------------------------------
+  sonarr:
+    image: ghcr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    network_mode: 'service:vpn'
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+      - UMASK_SET=022
+    volumes:
+      - ${DOCKERCONFDIR}/sonarr:/config
+      - ${TORRENT_SHAREDDIR}/downloads:/downloads
+      - ${SONARR_SHAREDDIR}:/tv
+#    ports:
+#      - 8989:8989
+    depends_on:
+      - vpn
+      - jackett
+      - torrent
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.2'
+#          memory: 256M
+    restart: always
+#-----------------------------------------------------------------------------------------------------
+  radarr:
+    image: ghcr.io/linuxserver/radarr
+#    image: randomninjaatk/radarr-extended:latest
+    container_name: radarr
+    network_mode: 'service:vpn'
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+      - UMASK_SET=022
+#      - enableAutoConfig=true
+#      - enableRecyclarr=true
+#      - enableQueueCleaner=true
+#      - enableExtras=true
+#      - extrasType=trailers
+#      - extrasLanguages=it-IT
+#      - extrasOfficialOnly=false
+#      - extrasSingle=false
+#      - extrasKodiCompatibility=false
+#      - plexUrl=http://x.x.x.x:32400
+#      - plexToken=Token_Goes_Here1~
+    volumes:
+      - ${DOCKERCONFDIR}/radarr:/config
+      - ${TORRENT_SHAREDDIR}:/downloads
+      - ${RADARR_SHAREDDIR}:/movies
+#    ports:
+#      - 7878:7878
+    depends_on:
+      - vpn
+      - jackett
+      - torrent
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.2'
+#          memory: '256M'
+    restart: always
+#-----------------------------------------------------------------------------------------------------
+  tautulli:
+    image: lscr.io/linuxserver/tautulli
+    container_name: tautulli
+    networks:
+      - compose_default
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    volumes:
+      - ${DOCKERCONFDIR}/tautulli/config:/config
+    depends_on:
+      - vpn
+      - plex
+#    ports:
+#      - 8181:8181
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.2'
+#          memory: '256M'
+    restart: always
+#-----------------------------------------------------------------------------------------------------
