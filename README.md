@@ -10,6 +10,7 @@ A complete solution for your personal media server needs, including automatic do
 - **Secure Access**: SWAG reverse proxy with Cloudflare integration
 - **Download Management**: Jackett for torrent indexing
 - **Analytics**: Tautulli for Plex statistics and monitoring
+- **NORDVPN**: NORDVPN for passing traffic trought NordVPN account (https://github.com/bubuntux/nordlynx)
 
 ## 🛠️ Prerequisites
 
