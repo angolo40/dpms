@@ -6,20 +6,21 @@ A complete solution for your personal media server needs, including automatic do
 
 - **Plex Media Server**: Stream your media anywhere
 - **Automated Downloads**: Integration with Sonarr (TV Shows) and Radarr (Movies)
-- **Torrent Management**: Transmission client with VPN protection
-- **Secure Access**: SWAG reverse proxy with Cloudflare integration
+- **Torrent Management**: Transmission client
 - **Download Management**: Jackett for torrent indexing
 - **Analytics**: Tautulli for Plex statistics and monitoring
-- **NORDVPN**: NORDVPN for passing traffic trought NordVPN account (https://github.com/bubuntux/nordlynx)
+- **Optional Secure Access**: SWAG reverse proxy with optional Cloudflare integration
+- **Optional VPN**: NORDVPN integration available (https://github.com/bubuntux/nordlynx)
 
 ## 🛠️ Prerequisites
 
 - Linux-based system (Ubuntu/Debian recommended)
-- At least 2GB RAM
+- At least 8GB RAM
 - Minimum 20GB storage space (recommended: 100GB+)
 - Active internet connection
-- (Optional) Cloudflare account for domain management
-- (Optional) NordVPN subscription
+- (Optional) Intel > i5 8xxx for best HW trascoding and PlexPass
+- (Optional) Domain name and Cloudflare account for SWAG integration
+- (Optional) NordVPN subscription for VPN protection
 
 ## 📦 Installation
 
@@ -49,42 +50,122 @@ Edit the `.env` file with your preferred text editor and configure all the requi
 nano .env
 ```
 
-### 5. Start the Services
+### 5. Optional: Configure SWAG with Cloudflare
+If you want to use SWAG with Cloudflare integration:
+
+1. Keep the SWAG service in docker-compose.yml
+2. Configure the Cloudflare-related variables in your .env file
+3. Set up the required configuration files:
+
+   a. Configure tunnelconfig.yml:
+   ```bash
+   # Copy the example file to swag/config/tunnelconfig.yml
+   cp tunnelconfig.yml /path/to/swag/config/
+   # Edit the file and replace yourdomain.com with your actual domain
+   nano /path/to/swag/config/tunnelconfig.yml
+   ```
+
+   Example configuration:
+   ```yaml
+   ingress:
+     - hostname: plex.yourdomain.com
+       service: https://localhost:443
+       originRequest:
+         connectTimeout: 10s
+         noTLSVerify: true
+     # Repeat for other services
+     - service: http_status:404
+   ```
+
+   b. Configure Cloudflare DNS authentication:
+   ```bash
+   # Copy the example file to swag/config/dns-conf/cloudflare.ini
+   cp cloudflare.ini /path/to/swag/config/dns-conf/
+   # Edit the file and add your Cloudflare API token
+   nano /path/to/swag/config/dns-conf/cloudflare.ini
+   ```
+
+   The cloudflare.ini file only requires editing the dns_cloudflare_api_token field with your Cloudflare API token.
+
+4. Configure the proxy settings:
+   ```bash
+   cd /path/to/swag/config/proxy-conf/
+   # Rename the sample configuration files
+   mv radarr.subdomain.conf.sample radarr.subdomain.conf
+   mv sonarr.subdomain.conf.sample sonarr.subdomain.conf
+   mv jackett.subdomain.conf.sample jackett.subdomain.conf
+   # Repeat for other services
+   ```
+
+5. If using both SWAG and NordVPN, modify each proxy configuration file:
+   ```nginx
+   # Original configuration in each .conf file
+   set $upstream_app radarr;
+   # Change to
+   set $upstream_app vpn;
+   ```
+
+### Advanced Security Configuration (🚧 Under Construction)
+
+Cloudflare offers additional security features through access configuration, such as:
+- Team access controls
+- GeoIP blocking
+- Additional authentication layers
+- Access policies
+- Traffic filtering
+
+The following optional configuration can be added to each service in your tunnelconfig.yml to enable these features:
+```yaml
+    access:
+      required: true
+      teamName: yourdomain.com
+```
+
+Detailed instructions for setting up and configuring these advanced security features will be provided in future updates.
+
+To run without Cloudflare:
+1. Comment out or remove the SWAG service from docker-compose.yml
+2. Uncomment the port mappings in each service
+3. Remove Cloudflare-related variables from your .env file
+
+### 6. Optional: Configure NordVPN
+If you want to use NordVPN:
+1. Keep the VPN service and network configuration as is
+2. Configure NordVPN credentials in your .env file
+
+To run without NordVPN:
+1. Remove the VPN service from docker-compose.yml
+2. For each service using `network_mode: service:vpn`, replace with:
+   ```yaml
+   networks:
+     - compose_default
+   ```
+3. Remove the VPN-related environment variables from your .env file
+
+### 7. Start the Services
 ```bash
 docker compose up -d
 ```
 
-## ⚙️ Configuration
+## ⚙️ Service Access
 
-### Required Environment Variables
-Check the `.env.example` file for all required variables. Key sections include:
+### With Cloudflare (SWAG) enabled:
+Access your services through their subdomains:
+- Plex: https://plex.yourdomain.com
+- Radarr: https://radarr.yourdomain.com
+- Sonarr: https://sonarr.yourdomain.com
+- Jackett: https://jackett.yourdomain.com
+- Transmission: https://torrent.yourdomain.com
+- Tautulli: https://tautulli.yourdomain.com
 
-- Global Settings (PGID, PUID, timezone)
-- Docker network configuration
-- SWAG (reverse proxy) settings
-- Plex configuration
-- NordVPN credentials
-- Media paths configuration
-
-### Service-Specific Setup
-
-#### Plex
-1. Access Plex at `http://your-server-ip:32400/web`
-2. Follow the first-time setup wizard
-3. Configure your libraries pointing to:
-   - `/movies` for Movies
-   - `/tv` for TV Shows
-
-#### Sonarr/Radarr
-1. Access Sonarr at `http://your-server-ip:8989`
-2. Access Radarr at `http://your-server-ip:7878`
-3. Configure download client (Transmission)
-4. Set up Jackett indexers
-
-#### SWAG
-1. Ensure your Cloudflare credentials are correctly set in `.env`
-2. Configure your domain DNS to point to your server
-3. SSL certificates will be automatically generated
+### Without Cloudflare:
+Access your services through their direct ports:
+- Plex: http://your-server-ip:32400
+- Radarr: http://your-server-ip:7878
+- Sonarr: http://your-server-ip:8989
+- Jackett: http://your-server-ip:9117
+- Transmission: http://your-server-ip:9091
+- Tautulli: http://your-server-ip:8181
 
 ## 📂 Directory Structure
 ```
@@ -96,14 +177,30 @@ Check the `.env.example` file for all required variables. Key sections include:
 ├── jackett         # Jackett configuration
 ├── tautulli        # Tautulli configuration
 └── swag            # SWAG configuration and SSL certificates
+    ├── config
+    │   ├── proxy-conf     # Nginx proxy configurations
+    │   ├── dns-conf      # Cloudflare DNS configuration
+    │   │   └── cloudflare.ini  # Cloudflare API credentials
+    │   └── tunnelconfig.yml   # Cloudflare tunnel configuration
 ```
 
 ## 🔒 Security
 
+### With Cloudflare & VPN:
 - All traffic is routed through NordVPN for downloading services
 - SWAG provides SSL encryption for all services
-- Default credentials should be changed immediately after installation
-- Regular updates are recommended for all containers
+- Cloudflare provides additional security features (optional):
+  - GeoIP blocking for restricting access by geographic location
+  - Advanced authentication policies
+  - Traffic filtering and rate limiting
+  - DDoS protection
+
+### Without Cloudflare & VPN:
+- Basic authentication is still enforced for all services
+- Consider using your router's firewall rules
+- Recommend using HTTPS when possible
+- Consider setting up alternative VPN solutions
+- Note: Advanced security features won't be available without Cloudflare integration
 
 ## 📝 Maintenance
 
@@ -142,6 +239,20 @@ tar -czf dpms_backup_$(date +%Y%m%d).tar.gz /path/to/config
    - Verify Jackett indexers are working
    - Check Transmission connection through VPN
    - Verify path permissions
+
+4. **SWAG/Proxy Issues**
+   - Verify proxy configuration files are properly renamed and configured
+   - Check SWAG logs for specific errors
+   - Ensure upstream_app is correctly set when using VPN
+   - Verify cloudflare.ini contains the correct API token
+   - Check tunnelconfig.yml has the correct domain names configured
+
+### Initial Setup Checklist
+- [ ] Environment variables configured in .env
+- [ ] tunnelconfig.yml copied to correct location and domain name updated
+- [ ] cloudflare.ini copied to dns-conf directory and API token configured
+- [ ] Proxy configuration files renamed and configured
+- [ ] If using VPN, upstream_app properly set in proxy configurations
 
 ## 🤝 Contributing
 
