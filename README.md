@@ -6,11 +6,11 @@ A complete solution for your personal media server needs, including automatic do
 
 - **Plex Media Server**: Stream your media anywhere
 - **Automated Downloads**: Integration with Sonarr (TV Shows) and Radarr (Movies)
-- **Torrent Management**: Transmission client
+- **Torrent Management**: Transmission client with VPN integration
+- **Optional Secure Access**: SWAG reverse proxy with optional Cloudflare integration
 - **Download Management**: Jackett for torrent indexing
 - **Analytics**: Tautulli for Plex statistics and monitoring
-- **Optional Secure Access**: SWAG reverse proxy with optional Cloudflare integration
-- **Optional VPN**: NORDVPN integration available (https://github.com/bubuntux/nordlynx)
+- **Built-in VPN**: NORDVPN integration using WireGuard (https://github.com/bubuntux/nordlynx)
 
 ## 🛠️ Prerequisites
 
@@ -18,9 +18,8 @@ A complete solution for your personal media server needs, including automatic do
 - At least 8GB RAM
 - Minimum 20GB storage space (recommended: 100GB+)
 - Active internet connection
-- (Optional) Intel > i5 8xxx for best HW trascoding and PlexPass
+- NordVPN subscription
 - (Optional) Domain name and Cloudflare account for SWAG integration
-- (Optional) NordVPN subscription for VPN protection
 
 ## 📦 Installation
 
@@ -50,7 +49,49 @@ Edit the `.env` file with your preferred text editor and configure all the requi
 nano .env
 ```
 
-### 5. Optional: Configure SWAG with Cloudflare
+### 5. NordVPN Configuration
+The VPN container uses NordLynx (WireGuard) protocol. You'll need:
+1. NordVPN account email
+2. NordVPN private key (follow the procedure at https://github.com/bubuntux/nordvpn to generate it)
+
+Configure these in your .env file:
+```yaml
+NORDVPN_EMAIL=your-email@example.com
+NORDVPN_PRIVATE_KEY=your-private-key  # Generate following https://github.com/bubuntux/nordvpn
+```
+
+If you don't want to use NordVPN:
+1. Remove the VPN service from docker-compose.yml
+2. For each service using `network_mode: service:vpn`, replace with:
+   ```yaml
+   networks:
+     - compose_default
+   ```
+3. Modify each .conf file in swag/config/nginx/proxy-conf/:
+   ```nginx
+   # Change from
+   set $upstream_app vpn;
+   # To
+   set $upstream_app service_name;  # (radarr, sonarr, etc.)
+   ```
+4. Remove the VPN-related environment variables from your .env file
+
+### 6. Optional: Configure SWAG with Cloudflare
+
+SWAG (Secure Web Application Gateway) is an Nginx-based container that provides:
+- Automatic SSL/TLS certificate management via Let's Encrypt
+- Reverse proxy for all services
+- Pre-configured application proxy files
+- Basic protection against common attacks
+- Fail2ban integration for protection against malicious login attempts
+
+Cloudflare integration adds:
+- Secure tunnel between Cloudflare and your server (no port forwarding needed)
+- Real IP masking
+- DDoS protection
+- End-to-end SSL
+- Automatic DNS management via Cloudflare API
+
 If you want to use SWAG with Cloudflare integration:
 
 1. Keep the SWAG service in docker-compose.yml
@@ -85,25 +126,22 @@ If you want to use SWAG with Cloudflare integration:
    nano /path/to/swag/config/dns-conf/cloudflare.ini
    ```
 
-   The cloudflare.ini file only requires editing the dns_cloudflare_api_token field with your Cloudflare API token.
-
-4. Configure the proxy settings:
+4. Set up proxy configurations:
    ```bash
-   cd /path/to/swag/config/proxy-conf/
-   # Rename the sample configuration files
-   mv radarr.subdomain.conf.sample radarr.subdomain.conf
-   mv sonarr.subdomain.conf.sample sonarr.subdomain.conf
-   mv jackett.subdomain.conf.sample jackett.subdomain.conf
-   # Repeat for other services
+   # Create proxy-conf directory if it doesn't exist
+   mkdir -p /path/to/swag/config/nginx/proxy-conf/
+   
+   # Copy the provided proxy configuration files
+   cp *.subdomain.conf /path/to/swag/config/nginx/proxy-conf/
    ```
 
-5. If using both SWAG and NordVPN, modify each proxy configuration file:
-   ```nginx
-   # Original configuration in each .conf file
-   set $upstream_app radarr;
-   # Change to
-   set $upstream_app vpn;
-   ```
+   Provided configuration files:
+   - jackett.subdomain.conf
+   - plex.subdomain.conf
+   - radarr.subdomain.conf
+   - sonarr.subdomain.conf
+   - tautulli.subdomain.conf
+   - transmission.subdomain.conf
 
 ### Advanced Security Configuration (🚧 Under Construction)
 
@@ -128,23 +166,78 @@ To run without Cloudflare:
 2. Uncomment the port mappings in each service
 3. Remove Cloudflare-related variables from your .env file
 
-### 6. Optional: Configure NordVPN
-If you want to use NordVPN:
-1. Keep the VPN service and network configuration as is
-2. Configure NordVPN credentials in your .env file
-
-To run without NordVPN:
-1. Remove the VPN service from docker-compose.yml
-2. For each service using `network_mode: service:vpn`, replace with:
-   ```yaml
-   networks:
-     - compose_default
-   ```
-3. Remove the VPN-related environment variables from your .env file
-
 ### 7. Start the Services
 ```bash
 docker compose up -d
+```
+
+### Network Architecture and Data Flow
+
+```ascii
+                                         Your Server
+Internet                                 +--------------------------+
+   |                                     |                          |
+   |    +-------------+                  |    +-----------------+   |
+   +----| Cloudflare  |------------------|----| SWAG (Reverse   |   |
+   |    | (Optional)  |                  |    | Proxy + SSL)    |   |
+   |    +-------------+                  |    +-----------------+   |
+   |                                     |            |            |
+   |    +-------------+                  |    +-----------------+   |
+   +----| NordVPN    |------------------|----| VPN Container   |   |
+        |            |                  |    |                 |   |
+        +-------------+                  |    +-----------------+   |
+                                        |            |            |
+                                        |    +-----------------+   |
+                                        |    | Service Layer   |   |
+                                        |    |                 |   |
+                                        |    | - Radarr        |   |
+                                        |    | - Sonarr        |   |
+                                        |    | - Jackett       |   |
+                                        |    | - Transmission  |   |
+                                        |    +-----------------+   |
+                                        |                          |
+                                        +--------------------------+
+```
+
+#### Example Data Flow (Movie Download)
+```ascii
+Internet User -> Request Movie
+     |
+     v
+[Cloudflare] (optional)
+     |
+     v
+[SWAG Reverse Proxy]
+     |
+     v
+[Radarr] --- Search Request ---> [Jackett]
+     |                              |
+     |                              v
+     |                     [Search Indexers]
+     |                              |
+     |                              v
+     +<---- Search Results ---------+
+     |
+     v
+[Decision & Selection]
+     |
+     v
+[VPN Container]
+     |
+     v
+[Transmission] --- Download ---> [Internet]
+     |
+     v
+[Downloaded File]
+     |
+     v
+[Radarr Processing]
+     |
+     v
+[Final Media Folder]
+     |
+     v
+[Plex Library]
 ```
 
 ## ⚙️ Service Access
@@ -178,9 +271,16 @@ Access your services through their direct ports:
 ├── tautulli        # Tautulli configuration
 └── swag            # SWAG configuration and SSL certificates
     ├── config
-    │   ├── proxy-conf     # Nginx proxy configurations
-    │   ├── dns-conf      # Cloudflare DNS configuration
-    │   │   └── cloudflare.ini  # Cloudflare API credentials
+    │   ├── nginx
+    │   │   └── proxy-conf     # Nginx proxy configurations
+    │   │       ├── jackett.subdomain.conf
+    │   │       ├── plex.subdomain.conf
+    │   │       ├── radarr.subdomain.conf
+    │   │       ├── sonarr.subdomain.conf
+    │   │       ├── tautulli.subdomain.conf
+    │   │       └── transmission.subdomain.conf
+    │   ├── dns-conf           # Cloudflare DNS configuration
+    │   │   └── cloudflare.ini # Cloudflare API credentials
     │   └── tunnelconfig.yml   # Cloudflare tunnel configuration
 ```
 
@@ -195,11 +295,10 @@ Access your services through their direct ports:
   - Traffic filtering and rate limiting
   - DDoS protection
 
-### Without Cloudflare & VPN:
+### Without Cloudflare:
 - Basic authentication is still enforced for all services
 - Consider using your router's firewall rules
 - Recommend using HTTPS when possible
-- Consider setting up alternative VPN solutions
 - Note: Advanced security features won't be available without Cloudflare integration
 
 ## 📝 Maintenance
@@ -241,18 +340,18 @@ tar -czf dpms_backup_$(date +%Y%m%d).tar.gz /path/to/config
    - Verify path permissions
 
 4. **SWAG/Proxy Issues**
-   - Verify proxy configuration files are properly renamed and configured
+   - Verify proxy configuration files are in the correct location
    - Check SWAG logs for specific errors
-   - Ensure upstream_app is correctly set when using VPN
    - Verify cloudflare.ini contains the correct API token
    - Check tunnelconfig.yml has the correct domain names configured
 
 ### Initial Setup Checklist
 - [ ] Environment variables configured in .env
-- [ ] tunnelconfig.yml copied to correct location and domain name updated
-- [ ] cloudflare.ini copied to dns-conf directory and API token configured
-- [ ] Proxy configuration files renamed and configured
-- [ ] If using VPN, upstream_app properly set in proxy configurations
+- [ ] NordVPN configured with email and private key
+- [ ] tunnelconfig.yml copied to correct location and domain name updated (if using Cloudflare)
+- [ ] cloudflare.ini copied to dns-conf directory and API token configured (if using Cloudflare)
+- [ ] Proxy configuration files copied to the correct location
+- [ ] All required directories created and permissions set
 
 ## 🤝 Contributing
 
