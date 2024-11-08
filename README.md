@@ -18,8 +18,8 @@ A complete solution for your personal media server needs, including automatic do
 - At least 8GB RAM
 - Minimum 20GB storage space (recommended: 100GB+)
 - Active internet connection
-- NordVPN subscription
 - (Optional) Domain name and Cloudflare account for SWAG integration
+- (Optional) NordVPN subscription for VPN protection
 
 ## 📦 Installation
 
