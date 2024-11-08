@@ -52,12 +52,12 @@ nano .env
 ### 5. NordVPN Configuration
 The VPN container uses NordLynx (WireGuard) protocol. You'll need:
 1. NordVPN account email
-2. NordVPN private key (follow the procedure at https://github.com/bubuntux/nordvpn to generate it)
+2. NordVPN private key (follow the procedure at (https://github.com/bubuntux/nordlynx?tab=readme-ov-file#how-to-get-your-private_key) to generate it)
 
 Configure these in your .env file:
 ```yaml
 NORDVPN_EMAIL=your-email@example.com
-NORDVPN_PRIVATE_KEY=your-private-key  # Generate following https://github.com/bubuntux/nordvpn
+NORDVPN_PRIVATE_KEY=your-private-key
 ```
 
 If you don't want to use NordVPN:
