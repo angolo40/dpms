@@ -7,7 +7,7 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: ${IPV4_NETWORK:-172.18.0}.0/24
+        - subnet: 172.18.0.0/24
 services:
 #-----------------------------------------------------------------------------------------------------
   swag:
@@ -119,7 +119,7 @@ services:
   torrent:
     image: ghcr.io/linuxserver/transmission
     container_name: torrent
-    network_mode: service:vpn
+    network_mode: 'service:vpn'
     depends_on:
       - vpn
     volumes:
@@ -160,7 +160,7 @@ services:
 #        limits:
 #          cpus: '0.2'
 #          memory: '256M'
-    restart: unless-stopped
+    restart: always
 #-----------------------------------------------------------------------------------------------------
   sonarr:
     image: ghcr.io/linuxserver/sonarr:latest
