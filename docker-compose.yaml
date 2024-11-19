@@ -17,7 +17,7 @@ services:
       - NET_ADMIN
     networks:
       compose_default:
-        ipv4_address: ${IPV4_NETWORK:-172.18.0}.10
+        ipv4_address: 172.18.0.10
     environment:
       - PGID=${PGID}
       - PUID=${PUID}
@@ -81,7 +81,7 @@ services:
 #        limits:
 #          cpus: '0.5'
 #          memory: '512M'
-    restart: unless-stopped
+    restart: always
 #-----------------------------------------------------------------------------------------------------
   vpn:
     image: ghcr.io/bubuntux/nordlynx
