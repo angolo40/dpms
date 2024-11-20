@@ -57,7 +57,6 @@ services:
       - HOSTNAME=${PLEX_HOSTNAME}.${DOCKERDOMAIN}
       - PLEX_ADVERTISE_IP=${PLEX_ADVERTISE_IP}
       - PLEX_ALLOWED_NETWORKS=${PLEX_ALLOWED_NETWORKS}
-      - PLEX_CLAIM=${PLEX_CLAIM}
     networks:
     - compose_default
     ports:
